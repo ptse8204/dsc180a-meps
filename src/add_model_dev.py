@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 
 
 #From section 3
-from Model_Dev_No_Debias.py import describe,test,plot,describe_metrics
+from Model_Dev_No_Debias import describe,test,plot,describe_metrics
 
 
 np.random.seed(1)
