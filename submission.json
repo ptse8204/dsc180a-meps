@@ -1,0 +1,4 @@
+{
+    "dockerhub-id": "jop010/replication",
+    "build-script": "python run.py"
+}
