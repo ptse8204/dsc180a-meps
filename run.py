@@ -1,40 +1,48 @@
-
+# This file would run the notebook output when given arg == "main"
 
 import sys
 import json
-import pandas as pd
 
 sys.path.insert(0, 'src')
-from etl import generate_data, save_data
-from eda import generate_stats
-from utils import convert_notebook
+import eda
+import Model_Dev_No_Debias
+import add_model_dev
+import reweighing_LR
+import reweighing_RF
+# Section 6 result summary would be on main
+import explain
 
 
+def main():
+    eda.main()
+    # Section 3
+    add_model_dev.main()
+    reweighing_LR.main()
+    reweighing_RF.main()
+    explain.main()
+    
+#     data_config = json.load(open('config/data-params.json'))
+#     eda_config = json.load(open('config/eda-params.json'))
 
-def main(targets):
+#     if 'data' in targets:
 
-    data_config = json.load(open('config/data-params.json'))
-    eda_config = json.load(open('config/eda-params.json'))
+#         data = generate_data(**data_config)
+#         save_data(data, **data_config)
 
-    if 'data' in targets:
+#     if 'eda' in targets:
 
-        data = generate_data(**data_config)
-        save_data(data, **data_config)
+#         try:
+#             data
+#         except NameError:
+#             data = pd.read_csv(data_config['data_fp'])
 
-    if 'eda' in targets:
-
-        try:
-            data
-        except NameError:
-            data = pd.read_csv(data_config['data_fp'])
-
-        generate_stats(data, **eda_config)
+#         generate_stats(data, **eda_config)
         
-        # execute notebook / convert to html
-        convert_notebook(**eda_config)
+#         # execute notebook / convert to html
+#         convert_notebook(**eda_config)
 
 
-if __name__ == '__main__':
+ if __name__ == '__main__':
 
-    targets = sys.argv[1:]
-    main(targets)
+     targets = sys.argv[1:]
+     main()
