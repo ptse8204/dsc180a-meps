@@ -1,4 +1,3 @@
-# LIME
 from aif360.datasets.lime_encoder import LimeEncoder
 import lime
 from lime.lime_tabular import LimeTabularExplainer
@@ -11,8 +10,12 @@ from aif360.algorithms.preprocessing import Reweighing
 from sklearn.preprocessing import StandardScaler
 
 from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.ensemble import RandomForestClassifier
 
-def explain_notebook():
+from collections import defaultdict
+
+def main():
     (dataset_orig_panel19_train,
      dataset_orig_panel19_val,
      dataset_orig_panel19_test) = MEPSDataset19().split([0.5, 0.8], shuffle=True)
@@ -78,3 +81,78 @@ def explain_notebook():
     show_explanation(correct_i)
     print("Predicted incorrectly by the model")
     show_explanation(wrong_pre_i)
+
+    
+    def test(dataset, model, thresh_arr):
+        try:
+            # sklearn classifier
+            y_val_pred_prob = model.predict_proba(dataset.features)
+            pos_ind = np.where(model.classes_ == dataset.favorable_label)[0][0]
+        except AttributeError:
+            # aif360 inprocessing algorithm
+            y_val_pred_prob = model.predict(dataset).scores
+            pos_ind = 0
+        
+        metric_arrs = defaultdict(list)
+        for thresh in thresh_arr:
+            y_val_pred = (y_val_pred_prob[:, pos_ind] > thresh).astype(np.float64)
+
+            dataset_pred = dataset.copy()
+            dataset_pred.labels = y_val_pred
+            metric = ClassificationMetric(
+                    dataset, dataset_pred,
+                    unprivileged_groups=unprivileged_groups,
+                    privileged_groups=privileged_groups)
+
+            metric_arrs['bal_acc'].append((metric.true_positive_rate()
+                                        + metric.true_negative_rate()) / 2)
+            metric_arrs['avg_odds_diff'].append(metric.average_odds_difference())
+            metric_arrs['disp_imp'].append(metric.disparate_impact())
+            metric_arrs['stat_par_diff'].append(metric.statistical_parity_difference())
+            metric_arrs['eq_opp_diff'].append(metric.equal_opportunity_difference())
+            metric_arrs['theil_ind'].append(metric.theil_index())
+        
+        return metric_arrs
+
+    def describe_metrics(metrics, thresh_arr):
+      best_ind = np.argmax(metrics['bal_acc'])
+      print("Threshold corresponding to Best balanced accuracy: {:6.4f}".format(thresh_arr[best_ind]))
+      print("Best balanced accuracy: {:6.4f}".format(metrics['bal_acc'][best_ind]))
+      disp_imp_at_best_ind = 1 - min(metrics['disp_imp'][best_ind], 1/metrics['disp_imp'][best_ind])
+      print("Corresponding 1-min(DI, 1/DI) value: {:6.4f}".format(disp_imp_at_best_ind))
+      print("Corresponding average odds difference value: {:6.4f}".format(metrics['avg_odds_diff'][best_ind]))
+      print("Corresponding statistical parity difference value: {:6.4f}".format(metrics['stat_par_diff'][best_ind]))
+      print("Corresponding equal opportunity difference value: {:6.4f}".format(metrics['eq_opp_diff'][best_ind]))
+      print("Corresponding Theil index value: {:6.4f}".format(metrics['theil_ind'][best_ind]))
+    thresh_arr = np.linspace(0.01, 0.5, 50)
+    lr_transf_metrics = test(dataset=dataset_orig_panel19_test,
+                            model=lr_model_gen(dataset_transf_panel19_train),
+                            thresh_arr=thresh_arr)
+    lr_transf_best_ind = np.argmax(lr_transf_metrics['bal_acc'])
+
+    describe_metrics(lr_transf_metrics, thresh_arr)
+
+    scaler = StandardScaler()
+    data_scaled_feat = scaler.fit_transform(dataset_transf_panel19_train.features)
+    model_nopip = RandomForestClassifier(n_estimators=500, min_samples_leaf=25)
+    rf_transf_panel19_nopipe = model_nopip.fit(data_scaled_feat, dataset_transf_panel19_train.labels.ravel(), sample_weight=dataset_transf_panel19_train.instance_weights)
+
+    # Find which index has different value, randomly picked from the dataset
+    mod_pred = rf_transf_panel19_nopipe.predict(dataset_orig_panel19_test.features)
+    diff_index = np.where((dataset_orig_panel19_test.labels).flatten() != mod_pred)[0]
+    wrong_pre_i = np.random.choice(diff_index)
+    correct_i = diff_index[0]
+    while correct_i in diff_index:
+      correct_i = np.random.choice(np.arange(0, len(mod_pred)))
+    
+    print("Correct Classification:")
+    print("The correct labeling is: " + str((dataset_orig_panel19_test.labels).flatten()[correct_i]))
+
+    plt.bar(["< 10 Visits",">= 10 Visits"],rf_transf_panel19_nopipe.predict_proba([dataset_orig_panel19_test.features[correct_i]])[0])
+    plt.show()
+
+    print("Incorrect Classification:")
+    print("The correct labeling is: " + str((dataset_orig_panel19_test.labels).flatten()[wrong_pre_i]))
+
+    plt.bar(["< 10 Visits",">= 10 Visits"],rf_transf_panel19_nopipe.predict_proba([dataset_orig_panel19_test.features[wrong_pre_i]])[0])
+    plt.show()
