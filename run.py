@@ -15,7 +15,7 @@ import explain
 
 def main():
     eda.main()
-    # Section 3
+    Model_Dev_No_Debias.main()
     add_model_dev.main()
     reweighing_LR.main()
     reweighing_RF.main()
