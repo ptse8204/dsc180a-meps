@@ -59,7 +59,7 @@ def describe(train=None, val=None, test=None):
 
 
 
-def generate_model_performance_plots_and_charts(train_dataset, valid_dataset, test_dataset):
+def generate_LR_performance_plots_and_charts(train_dataset, valid_dataset, test_dataset):
 
     model = make_pipeline(StandardScaler(),
                           LogisticRegression(solver='liblinear', random_state=1))
