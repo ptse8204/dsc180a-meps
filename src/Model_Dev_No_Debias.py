@@ -7,7 +7,6 @@ when we train models without de-biasing
 import sys
 sys.path.insert(0, '../')
 
-%matplotlib inline
 import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import Markdown, display
@@ -28,6 +27,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from collections import defaultdict
 import matplotlib.pyplot as plt
+
+
 
 np.random.seed(1)
 
@@ -54,12 +55,76 @@ def describe(train=None, val=None, test=None):
         print(test.feature_names)
 
 
+def test(dataset, model, thresh_arr, unprivileged_groups, privileged_groups):
+    try:
+        # sklearn classifier
+        y_val_pred_prob = model.predict_proba(dataset.features)
+        pos_ind = np.where(model.classes_ == dataset.favorable_label)[0][0]
+    except AttributeError:
+        # aif360 inprocessing algorithm
+        y_val_pred_prob = model.predict(dataset).scores
+        pos_ind = 0
+    
+    metric_arrs = defaultdict(list)
+    for thresh in thresh_arr:
+        y_val_pred = (y_val_pred_prob[:, pos_ind] > thresh).astype(np.float64)
+
+        dataset_pred = dataset.copy()
+        dataset_pred.labels = y_val_pred
+        metric = ClassificationMetric(
+                dataset, dataset_pred,
+                unprivileged_groups=unprivileged_groups,
+                privileged_groups=privileged_groups)
+
+        metric_arrs['bal_acc'].append((metric.true_positive_rate()
+                                     + metric.true_negative_rate()) / 2)
+        metric_arrs['avg_odds_diff'].append(metric.average_odds_difference())
+        metric_arrs['disp_imp'].append(metric.disparate_impact())
+        metric_arrs['stat_par_diff'].append(metric.statistical_parity_difference())
+        metric_arrs['eq_opp_diff'].append(metric.equal_opportunity_difference())
+        metric_arrs['theil_ind'].append(metric.theil_index())
+    
+    return metric_arrs
+
+def plot(x, x_name, y_left, y_left_name, y_right, y_right_name):
+    fig, ax1 = plt.subplots(figsize=(10,7))
+    ax1.plot(x, y_left)
+    ax1.set_xlabel(x_name, fontsize=16, fontweight='bold')
+    ax1.set_ylabel(y_left_name, color='b', fontsize=16, fontweight='bold')
+    ax1.xaxis.set_tick_params(labelsize=14)
+    ax1.yaxis.set_tick_params(labelsize=14)
+    ax1.set_ylim(0.5, 0.8)
+
+    ax2 = ax1.twinx()
+    ax2.plot(x, y_right, color='r')
+    ax2.set_ylabel(y_right_name, color='r', fontsize=16, fontweight='bold')
+    if 'DI' in y_right_name:
+        ax2.set_ylim(0., 0.7)
+    else:
+        ax2.set_ylim(-0.25, 0.1)
+
+    best_ind = np.argmax(y_left)
+    ax2.axvline(np.array(x)[best_ind], color='k', linestyle=':')
+    ax2.yaxis.set_tick_params(labelsize=14)
+    ax2.grid(True)
+
+def describe_metrics(metrics, thresh_arr):
+    best_ind = np.argmax(metrics['bal_acc'])
+    print("Threshold corresponding to Best balanced accuracy: {:6.4f}".format(thresh_arr[best_ind]))
+    print("Best balanced accuracy: {:6.4f}".format(metrics['bal_acc'][best_ind]))
+#     disp_imp_at_best_ind = np.abs(1 - np.array(metrics['disp_imp']))[best_ind]
+    disp_imp_at_best_ind = 1 - min(metrics['disp_imp'][best_ind], 1/metrics['disp_imp'][best_ind])
+    print("Corresponding 1-min(DI, 1/DI) value: {:6.4f}".format(disp_imp_at_best_ind))
+    print("Corresponding average odds difference value: {:6.4f}".format(metrics['avg_odds_diff'][best_ind]))
+    print("Corresponding statistical parity difference value: {:6.4f}".format(metrics['stat_par_diff'][best_ind]))
+    print("Corresponding equal opportunity difference value: {:6.4f}".format(metrics['eq_opp_diff'][best_ind]))
+    print("Corresponding Theil index value: {:6.4f}".format(metrics['theil_ind'][best_ind]))
 
 
 
 
 
-def generate_LR_performance_plots_and_charts(train_dataset, valid_dataset, test_dataset):
+def generate_model_performance_plots_and_charts(train_dataset, valid_dataset, test_dataset, unprivileged_groups, privileged_groups):
 
     model = make_pipeline(StandardScaler(),
                           LogisticRegression(solver='liblinear', random_state=1))
@@ -172,6 +237,7 @@ def generate_LR_performance_plots_and_charts(train_dataset, valid_dataset, test_
 
     describe_metrics(lr_orig_metrics, [thresh_arr[lr_orig_best_ind]])
 
+    return lr_orig_metrics
 
 
 
@@ -181,19 +247,12 @@ def generate_LR_performance_plots_and_charts(train_dataset, valid_dataset, test_
 
 
 
-
-
-
-
-
-
-def generate_RF_performance_plots_and_charts(train_dataset, valid_dataset, test_dataset):
+def generate_RF_performance_plots_and_charts(train_dataset, valid_dataset, test_dataset, unprivileged_groups, privileged_groups):
 
     model = make_pipeline(StandardScaler(),
-                          LogisticRegression(solver='liblinear', random_state=1))
+                          RandomForestClassifier(n_estimators=500, min_samples_leaf=25))
     fit_params = {'randomforestclassifier__sample_weight': train_dataset.instance_weights}
-
-    lr_orig_panel19 = model.fit(train_dataset.features, train_dataset.labels.ravel(), **fit_params)
+    rf_orig_panel19 = model.fit(train_dataset.features, train_dataset.labels.ravel(), **fit_params)
 
     ################################################################################################
     ## Helper Function
@@ -232,9 +291,9 @@ def generate_RF_performance_plots_and_charts(train_dataset, valid_dataset, test_
 
     thresh_arr = np.linspace(0.01, 0.5, 50)
     val_metrics = test(dataset=valid_dataset,
-                       model=lr_orig_panel19,
+                       model=rf_orig_panel19,
                        thresh_arr=thresh_arr)
-    lr_orig_best_ind = np.argmax(val_metrics['bal_acc'])
+    rf_orig_best_ind = np.argmax(val_metrics['bal_acc'])
 
 
     ################################################################################################
@@ -294,10 +353,12 @@ def generate_RF_performance_plots_and_charts(train_dataset, valid_dataset, test_
     ###  fairness metrics when testing LR model on original data
 
     print ("testing RF model on original data")
-    lr_orig_metrics = test(dataset=test_dataset,
-                       model=lr_orig_panel19,
-                       thresh_arr=[thresh_arr[lr_orig_best_ind]])
+    rf_orig_metrics = test(dataset=test_dataset,
+                       model=rf_orig_panel19,
+                       thresh_arr=[thresh_arr[rf_orig_best_ind]])
 
-    describe_metrics(lr_orig_metrics, [thresh_arr[lr_orig_best_ind]])
+    describe_metrics(rf_orig_metrics, [thresh_arr[rf_orig_best_ind]])
+    
+    return rf_orig_metrics
 
 

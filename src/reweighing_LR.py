@@ -7,7 +7,6 @@
 import sys
 sys.path.insert(0, '../')
 
-get_ipython().run_line_magic('matplotlib', 'inline')
 import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import Markdown, display
@@ -43,6 +42,8 @@ import lime
 from lime.lime_tabular import LimeTabularExplainer
 
 
+from Model_Dev_No_Debias import describe,test,plot,describe_metrics
+
 #imports from other py
 #import test from  
 #import describe_metrics from 
@@ -59,8 +60,8 @@ np.random.seed(1)
 # In[ ]:
 
 
-def create_dataset():
-    data = dataset_orig_panel19_train.copy()
+def create_dataset(dataset_orig_panel19_train):
+    data = dataset_orig_panel19_train
     
     pr_orig_scaler = StandardScaler()
     data.features = pr_orig_scaler.fit_transform(data.features)
@@ -71,7 +72,7 @@ def create_dataset():
 # In[ ]:
 
 
-def transform(data):
+def transform(data, unprivileged_groups, privileged_groups):
     RW = Reweighing(unprivileged_groups=unprivileged_groups,
                 privileged_groups=privileged_groups)
     dataset_transf_panel19_train = RW.fit_transform(data)
@@ -108,11 +109,13 @@ def training_model(data):
 # In[ ]:
 
 
-def testing_model(valid_data,test_data, model):
+def testing_model(valid_data,test_data, model, unprivileged_groups, privileged_groups):
     thresh_arr = np.linspace(0.01, 0.5, 50)
     val_metrics = test(dataset=valid_data,
                    model=model,
-                   thresh_arr=thresh_arr)
+                   thresh_arr=thresh_arr,
+                   unprivileged_groups=unprivileged_groups,
+                   privileged_groups=privileged_groups)
     lr_transf_best_ind = np.argmax(val_metrics['bal_acc'])
     
     
@@ -133,8 +136,11 @@ def testing_model(valid_data,test_data, model):
     
     lr_transf_metrics = test(dataset=test_data,
                          model=model,
-                         thresh_arr=[thresh_arr[lr_transf_best_ind]])
+                         thresh_arr=[thresh_arr[lr_transf_best_ind]],
+                         unprivileged_groups=unprivileged_groups,
+                         privileged_groups=privileged_groups)
+                         
     
     describe_metrics(lr_transf_metrics, [thresh_arr[lr_transf_best_ind]])
     
-
+    return lr_transf_metrics

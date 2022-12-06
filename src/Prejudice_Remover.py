@@ -7,7 +7,6 @@
 import sys
 sys.path.insert(0, '../')
 
-get_ipython().run_line_magic('matplotlib', 'inline')
 import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import Markdown, display
@@ -46,6 +45,8 @@ from lime.lime_tabular import LimeTabularExplainer
 #imports from other py
 #import test from  
 #import describe_metrics from 
+from Model_Dev_No_Debias import describe,test,plot,describe_metrics
+
 
 np.random.seed(1)
 
@@ -53,23 +54,21 @@ np.random.seed(1)
 # In[ ]:
 
 
-def create_dataset():
+def create_dataset(dataset_orig_panel19_train):
     data = dataset_orig_panel19_train.copy()
     
     pr_orig_scaler = StandardScaler()
     data.features = pr_orig_scaler.fit_transform(data.features)
     
-    return data
+    return data, pr_orig_scaler
 
 
 # In[ ]:
 
 
-def create_PR_model(data):
+def create_PR_model(data, sens_attr):
     
     model = PrejudiceRemover(sensitive_attr=sens_attr, eta=25.0)
-    pr_orig_scaler = StandardScaler()
-
 
     pr_orig_panel19 = model.fit(data)
     return  pr_orig_panel19
@@ -78,17 +77,19 @@ def create_PR_model(data):
 # In[ ]:
 
 
-def testing_model(valid_data, test_data, model):
+def testing_model(valid_data, test_data, model, pr_orig_scaler, unprivileged_groups, privileged_groups):
     thresh_arr = np.linspace(0.01, 0.50, 50)
 
     #dataset = dataset_orig_panel19_val.copy()
-    dataset.features = pr_orig_scaler.transform(valid_data.features)
+    valid_data.features = pr_orig_scaler.transform(valid_data.features)
 
     val_metrics = test(dataset=valid_data,
                        model=model,
-                       thresh_arr=thresh_arr)
+                       thresh_arr=thresh_arr,
+                       unprivileged_groups=unprivileged_groups,
+                       privileged_groups=privileged_groups)
     
-    pr_orig_best_ind = np.argmax(val_metrics['bal_acc'])\    
+    pr_orig_best_ind = np.argmax(val_metrics['bal_acc'])
     
     disp_imp = np.array(val_metrics['disp_imp'])
     disp_imp_err = 1 - np.minimum(disp_imp, 1/disp_imp)
@@ -106,13 +107,16 @@ def testing_model(valid_data, test_data, model):
     
     
     #dataset = dataset_orig_panel19_test.copy()
-    dataset.features = pr_orig_scaler.transform(test_data.features)
+    test_data.features = pr_orig_scaler.transform(test_data.features)
 
     pr_orig_metrics = test(dataset=test_data,
                        model=model,
-                       thresh_arr=[thresh_arr[pr_orig_best_ind]])
+                       thresh_arr=[thresh_arr[pr_orig_best_ind]],
+                       unprivileged_groups=unprivileged_groups,
+                       privileged_groups=privileged_groups)
     
     describe_metrics(pr_orig_metrics, [thresh_arr[pr_orig_best_ind]])
     
+    return pr_orig_metrics
     
 

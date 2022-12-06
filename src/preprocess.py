@@ -23,14 +23,8 @@ from scipy.stats import zscore
 
 
 
-def get_panel_19_20():
-    gdown.download("https://drive.google.com/uc?export=download&id=1YCJVsfkOxrUoaTRLfe59phWBIQO8mG3B", "./", quiet=False)
-    
-    with zipfile.ZipFile("archive.zip", 'r') as zip_ref:
-        zip_ref.extractall()
-    raw_181 = pd.read_csv('h181.csv')
-
-
+def get_panel_19_20(csv):
+    raw_181 = csv
 
     default_mappings = {
         'label_maps': [{1.0: '>= 10 Visits', 0.0: '< 10 Visits'}],
@@ -248,3 +242,5 @@ def description_stats(df_panel_19, df_panel_19_reduced, df_panel_20, df_panel_20
     print("Pair plots:")
     print(sns.pairplot(concat_df, y_vars =["EMPHDX"]))
     print(sns.pairplot(concat_df, y_vars =["AGE", "PCS42", "MCS42", "PERWT15F"]))
+    
+    return descript_dict, revert_dct

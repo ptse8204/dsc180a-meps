@@ -7,7 +7,6 @@
 import sys
 sys.path.insert(0, '../')
 
-get_ipython().run_line_magic('matplotlib', 'inline')
 import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import Markdown, display
@@ -42,11 +41,7 @@ from aif360.datasets.lime_encoder import LimeEncoder
 import lime
 from lime.lime_tabular import LimeTabularExplainer
 
-
-#imports from other py
-#import test from  
-#import describe_metrics from 
-
+from Model_Dev_No_Debias import describe,test,plot,describe_metrics
 
 np.random.seed(1)
 
@@ -59,17 +54,20 @@ def training_model(data):
     model = make_pipeline(StandardScaler(),
                       RandomForestClassifier(n_estimators=500, min_samples_leaf=25))
     fit_params = {'randomforestclassifier__sample_weight': data.instance_weights}
-    rf_transf_panel19 = model.fit(data.features, data.labels.ravel(), **fit_params)    return rf_transf_panel19
+    rf_transf_panel19 = model.fit(data.features, data.labels.ravel(), **fit_params)
+    return rf_transf_panel19
 
 
 # In[ ]:
 
 
-def testing_model(val_data,test_data, model):
+def testing_model(val_data,test_data, model, unprivileged_groups, privileged_groups):
     thresh_arr = np.linspace(0.01, 0.5, 50)
-    val_metrics = test(dataset=valid_data,
+    val_metrics = test(dataset=val_data,
                    model=model,
-                   thresh_arr=thresh_arr)
+                   thresh_arr=thresh_arr,
+                   unprivileged_groups=unprivileged_groups,
+                   privileged_groups=privileged_groups)
     rf_transf_best_ind = np.argmax(val_metrics['bal_acc'])
     
     
@@ -89,6 +87,8 @@ def testing_model(val_data,test_data, model):
     
     rf_transf_metrics = test(dataset=test_data,
                          model=model,
-                         thresh_arr=[thresh_arr[rf_transf_best_ind]])
+                         thresh_arr=[thresh_arr[rf_transf_best_ind]],
+                         unprivileged_groups=unprivileged_groups,
+                         privileged_groups=privileged_groups)
     describe_metrics(rf_transf_metrics, [thresh_arr[rf_transf_best_ind]])
 
